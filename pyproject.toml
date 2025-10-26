@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "nb2hugo"
+version = "0.1.0"
+description = "Helps to convert jupyter-notebooks to markdown-files in hugo-format"
+authors = ["protogia <goldengrizz01@gmail.com>"]
+packages = [{include = "protogia"}]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+LiVa = "*"
+rich-argparse = "^1.4.0"
+argcomplete = "^3.2.3"
+pillow = "^10.2.0"
+opencv-python = "^4.9.0.80"
+pandas = "^2.2.2"
+pretty-errors = "^1.2.25"
+nbconvert = "^7.16.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
