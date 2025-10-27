@@ -160,7 +160,7 @@ def main() -> None:
         if is_code_cell:
             if not is_in_group:
                 # Start a new group
-                current_group_content += '{{<details>}} \n\n'
+                current_group_content += '{{<details title="">}} \n\n'
                 is_in_group = True
             
             # append the cell content (code and its non-plotly outputs)
@@ -231,13 +231,33 @@ def main() -> None:
             metadata = metadata.replace("'{{ .Date }}'", f"'{datetime.datetime.now(datetime.timezone.utc).isoformat()}'")
         body = metadata.strip() + '\n\n' + body
 
-    # Determine output path
+# Determine output path
     output_path = os.path.join(cli_args.destination, f"{filename_base}.md")
+
+    # --- Add language tags (```python) only to opening fences ---
+    lang = notebook.metadata.get("language_info", {}).get("name", "python")
+
+    lines = body.splitlines()
+    inside_code = False
+    for i, line in enumerate(lines):
+        # detect a fence that has only ``` (optionally with spaces)
+        if re.fullmatch(r"\s*```", line):
+            if not inside_code:
+                # opening fence → add language
+                lines[i] = f"```{lang}"
+                inside_code = True
+            else:
+                # closing fence → leave as plain ```
+                inside_code = False
+    body = "\n".join(lines)
+    # ------------------------------------------------------------
+
 
     with open(output_path, 'w', encoding='utf-8') as outfile:
         outfile.write(body)
+
     print(f"[green]Notebook converted to Markdown:[/green] [italic yellow]{output_path}[/italic yellow]")
-        
+
 
 if __name__=="__main__":
     main()
