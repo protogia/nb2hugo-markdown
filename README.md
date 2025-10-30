@@ -1,9 +1,13 @@
 # nb2hugo-markdown
 Utility to convert jupyter-notebooks into hugo-renderable markdowns supporting outputs from plotly and matplotlib.
 
+## features
+- supports plotly-chart-shortcode
+- supports convertion of pandas.DataFrame-output into markdown 
+- supports grouping of codecells within exapandable-sections
+
 ## install
 ```bash
-poetry shell
 poetry install
 ```
 
