@@ -28,8 +28,7 @@ pretty_errors.configure(
     display_locals      = True
 )
 
-# ---
-# NOTE: parse_arguments remains unchanged
+
 def parse_arguments() -> Namespace:
     parser = ArgumentParser(
         prog="ipynb2md",
@@ -52,9 +51,8 @@ def parse_arguments() -> Namespace:
     argcomplete.autocomplete(parser)
     
     return parser.parse_args()
-# ---
 
-## HTML Table to Markdown Conversion
+
 def html_table_to_markdown(html_string: str) -> str:
     """Converts a single HTML table (like those from pandas) to a Markdown table."""
     soup = BeautifulSoup(html_string, 'html.parser')
@@ -65,26 +63,25 @@ def html_table_to_markdown(html_string: str) -> str:
         
     markdown_lines = []
     
-    # --- 1. Header Row and Separator ---
     header_row = []
     separator_row = []
     
-    # Extract headers from <thead>
+    # extract headers from <thead>
     for th in table.find('thead').find_all('th'):
         header_row.append(th.get_text().strip())
         separator_row.append('---')
     
-    # Remove the first element if it's the empty index header
+    # remove the first element if it's the empty index header
     if header_row and header_row[0] == "":
         header_row = header_row[1:]
         separator_row = separator_row[1:]
 
-    # Join the header and separator rows for markdown
+    # join the header and separator rows for markdown
     if header_row:
         markdown_lines.append(f"| {' | '.join(header_row)} |")
         markdown_lines.append(f"| {' | '.join(separator_row)} |")
     
-    # --- 2. Data Rows ---
+    # datarows
     for tr in table.find('tbody').find_all('tr'):
         data_row = []
         
@@ -96,12 +93,11 @@ def html_table_to_markdown(html_string: str) -> str:
         for td in tr.find_all('td'):
             data_row.append(td.get_text().strip())
         
-        # Join the data row for markdown
+        # join the data row for markdown
         markdown_lines.append(f"| {' | '.join(data_row)} |")
         
-    # Add a newline after the table to ensure it renders correctly after the shortcode
     return "\n".join(markdown_lines) + "\n"
-# ---
+
 
 
 def main() -> None:
@@ -129,7 +125,7 @@ def main() -> None:
     # Find the indices of cells that are code cells
     code_cell_indices = [i for i, cell in enumerate(notebook.cells) if cell.cell_type == 'code']
     
-    # Iterate in reverse to allow for safe insertion of new cells
+    # iterate in reverse to allow for safe insertion of new cells
     for cell_index in reversed(code_cell_indices):
         cell = notebook.cells[cell_index]
 
@@ -142,7 +138,7 @@ def main() -> None:
             for output_idx, output in enumerate(cell.outputs):
                 if 'data' in output:
                     
-                    # 1. Plotly Handling
+                    # plotly handling
                     if plotly_mime_type in output['data']:
                         chart_data = output['data'][plotly_mime_type]
                         
@@ -179,7 +175,7 @@ def main() -> None:
                         
                         outputs_to_remove.append(output_idx) 
 
-                    # 2. Dataframe HTML Handling 
+                    # Dataframe HTML Handling 
                     elif dataframe_html_mime_type in output['data']:
                         html_content = output['data'][dataframe_html_mime_type]
                         
@@ -197,18 +193,16 @@ def main() -> None:
                             
                             outputs_to_remove.append(output_idx) 
                         
-            # --- Apply Changes ---
             
-            # 1. Update the original cell's outputs, REMOVING Plotly/Dataframe HTML
+            # update the original cell's outputs, REMOVING Plotly/Dataframe HTML
             cell.outputs = [out for idx, out in enumerate(cell.outputs) if idx not in outputs_to_remove]
             
-            # 2. Insert new cells (Markdown Table first, then Plotly shortcode)
+            # Insert Dataframe Markdown cell
             if dataframe_cell:
-                # Insert Dataframe Markdown cell
                 notebook.cells.insert(cell_index + 1, dataframe_cell)
-            
+
+            # Insert Plotly placeholder cell    
             if placeholder_cell:
-                # Insert Plotly placeholder cell 
                 notebook.cells.insert(cell_index + 1, placeholder_cell)
 
     if plotly_count == 0:
@@ -248,8 +242,6 @@ def main() -> None:
             
             # append the cell content (code and its non-plotly outputs)
             current_group_content += cell_markdown + "\n\n"
-        
-        # --- MODIFIED GROUPING LOGIC ---
         
         # If it is a Dataframe output, and we are currently in a group, include it.
         elif is_dataframe_output and is_in_group:
@@ -301,18 +293,16 @@ def main() -> None:
                 output
             ).replace('\\', '/')
             
-            # Replace the image data reference in the markdown with the local link
+            # replace the image data reference in the markdown with the local link
             body = re.sub(
                 rf'\[png\]\({re.escape(output)}\)', 
                 f"![alt-text]({hugo_image_path})", 
                 body
             )
 
-
-    # Final Formatting
     filename_base = os.path.splitext(os.path.basename(cli_args.file))[0]
 
-    # add metainformation for hugo-webblog
+    # add metainformation for hugo-webblog based on archetypes
     if "content/blog"  in cli_args.destination:
         with open("archetypes/blog.md", "r", encoding='utf-8') as f:
             metadata = f.read()
@@ -322,27 +312,36 @@ def main() -> None:
             metadata = metadata.replace("'{{ replace .File.ContentBaseName `-` ` ` | title }}'", f"'{title}'")
             metadata = metadata.replace("'{{ .Date }}'", f"'{datetime.datetime.now(datetime.timezone.utc).isoformat()}'")
         body = metadata.strip() + '\n\n' + body
-
-# Determine output path
+    
+    elif "content/projects"  in cli_args.destination:
+        with open("archetypes/projects.md", "r", encoding='utf-8') as f:
+            metadata = f.read()
+            
+            # replace placeholders for blogpost-title and date
+            title = filename_base.replace("-", " ").replace(".md", "")
+            metadata = metadata.replace("'{{ replace .File.ContentBaseName `-` ` ` | title }}'", f"'{title}'")
+            metadata = metadata.replace("'{{ .Date }}'", f"'{datetime.datetime.now(datetime.timezone.utc).isoformat()}'")
+        body = metadata.strip() + '\n\n' + body
+    
+    
     output_path = os.path.join(cli_args.destination, f"{filename_base}.md")
 
-    # --- Add language tags (```python) only to opening fences ---
+    # add language tags (```python) only to opening fences
     lang = notebook.metadata.get("language_info", {}).get("name", "python")
 
     lines = body.splitlines()
     inside_code = False
     for i, line in enumerate(lines):
-        # detect a fence that has only ``` (optionally with spaces)
+        # detect a fence that has only ``` 
         if re.fullmatch(r"\s*```", line):
             if not inside_code:
-                # opening fence → add language
+                # opening fence -> add language
                 lines[i] = f"```{lang}"
                 inside_code = True
             else:
-                # closing fence → leave as plain ```
+                # closing fence -> leave as plain ```
                 inside_code = False
     body = "\n".join(lines)
-    # ------------------------------------------------------------
 
 
     with open(output_path, 'w', encoding='utf-8') as outfile:
